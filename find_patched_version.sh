@@ -1,9 +1,5 @@
 #!/bin/bash -e
 
-# Directory containing the release.txt files for each OCP release like:
-# 4.12.12/release.txt
-# 4.12.13/release.txt
-#RELEASES_DIR=${RELEASES_DIR:-'/home/danclark/releases/files/mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp'}
 # OpenShift 4 Version
 OCP_VER=${OCP_VER:-'4.12.11'}
 OCP_MAJ_VER=$(echo ${OCP_VER} | cut -d '.' -f 2)
