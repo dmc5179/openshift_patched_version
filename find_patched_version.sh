@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 
 # Directory containing the release.txt files for each OCP release like:
 # 4.12.12/release.txt
@@ -15,7 +15,7 @@ RHSA=${RHSA:-'RHSA-2023:0173'}
 
 
 # Name of the image in the release.txt file
-IMAGE_NAME=$(curl -q "https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/${OCP_VER}/release.txt" | grep "${IMAGE}" | awk -F\  '{print $1}')
+IMAGE_NAME=$(curl -s "https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/${OCP_VER}/release.txt" | grep "${IMAGE}" | awk -F\  '{print $1}')
 
 # Check if the RHSA is actually present in the image
 # TODO: Need to run on host with RHEL subscription attached to pull errata
@@ -26,17 +26,22 @@ IMAGE_NAME=$(curl -q "https://mirror.openshift.com/pub/openshift-v4/x86_64/clien
 #  exit 0
 #fi
 
+if [ ! -d rhsas ]
+then
+  mkdir rhsas
+fi
+
 echo "Scanning..."
 
 # Get the highest possible stable version of OpenShift 4
-LATEST=$(curl -q 'https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt' | grep '^Name: ' | awk -F\  '{print $NF}' | cut -d '.' -f 2)
+LATEST=$(curl -s 'https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/release.txt' | grep '^Name: ' | awk -F\  '{print $NF}' | cut -d '.' -f 2)
 
 while [ ${OCP_MAJ_VER} -le ${LATEST} ]
 do
 
   # Highest version available in same channel as ${OCP_MAJ_VER}
   # i.e start with 4.12.11 then this is highest 4.12.x release
-  LATEST_IN_CHANNEL_MIN=$(curl -q "https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable-4.${OCP_MAJ_VER}/release.txt" | grep '^Name: ' | awk -F\  '{print $NF}' | cut -d '.' -f 3)
+  LATEST_IN_CHANNEL_MIN=$(curl -s "https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable-4.${OCP_MAJ_VER}/release.txt" | grep '^Name: ' | awk -F\  '{print $NF}' | cut -d '.' -f 3)
   
   # If we're already at the latest in channel then exit
   #if ${OCP_MIN_VER} -eq ${LATEST_IN_CHANNEL_MIN}
@@ -51,20 +56,27 @@ do
   
   #for channel in $(seq $(echo "${OCP_MAJ_VER} + 1" | bc) $(echo "${LATEST} + 1" | bc)  )
   
-  for rel in $(seq $(echo "${OCP_MIN_VER} + 1" | bc) $(echo "${LATEST_IN_CHANNEL_MIN} + 1" | bc))
+  #for rel in $(seq $(echo "${OCP_MIN_VER} + 1" | bc) $(echo "${LATEST_IN_CHANNEL_MIN} + 1" | bc))
+  for rel in $(seq $(echo "${OCP_MIN_VER} + 1" | bc) ${LATEST_IN_CHANNEL_MIN})
   do
     echo "Checking release: 4.${OCP_MAJ_VER}.${rel}"
   
     # Get the digest of the same image name in the next release to check
-    DIGEST=$(curl -q "https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/4.${OCP_MAJ_VER}.${rel}/release.txt" | grep "${IMAGE_NAME}" | awk -F\  '{print $2}')
+    DIGEST=$(curl -s "https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/4.${OCP_MAJ_VER}.${rel}/release.txt" | grep "${IMAGE_NAME}" | awk -F\  '{print $2}')
   
     #echo "${DIGEST}" >> digests.txt
     #continue
   
     # Check if the RHSA is actually present in the image
     # TODO: Need to run on host with RHEL subscription attached to pull errata
-    podman run -t --rm --user root --entrypoint '["bash", "-c", "yum list-sec"]' "${DIGEST}" > "rhsas_4_${OCP_MAJ_VER}_${rel}.txt"
-    if ! grep -q ${RHSA} "rhsas_4_${OCP_MAJ_VER}_${rel}.txt"
+    # Only run this command if I don't already have the list from this image
+    if [ ! -e "rhsas/${IMAGE_NAME}_rhsas_4_${OCP_MAJ_VER}_${rel}.txt" ]
+    then
+      podman run -t --rm --user root --entrypoint '["bash", "-c", "yum list-sec"]' "${DIGEST}" > "rhsas/${IMAGE_NAME}_rhsas_4_${OCP_MAJ_VER}_${rel}.txt"
+    fi
+
+    #TODO: Check that the file is non-zero
+    if ! grep -q ${RHSA} "rhsas/${IMAGE_NAME}_rhsas_4_${OCP_MAJ_VER}_${rel}.txt"
     then
       echo "RHSA not found in OCP release: 4.${OCP_MAJ_VER}.${rel}, which means the patch has been applied. Exiting"
       exit 0
