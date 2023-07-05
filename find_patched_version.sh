@@ -1,5 +1,10 @@
 #!/bin/bash -e
 
+# Parameters
+# OCP_VER = OpenShift version, i.e; 4.12.11
+# IMAGE = Digest of OpenShift image the RHSA is found in, i.e; quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:0a68f56ec1f9fdc03290d420085d108fe8be13d390a4354607b79f6946cfaa2d
+# RHSA = RHSA to scan for, i.e; RHSA-2023:0173
+
 # OpenShift 4 Version
 OCP_VER=${OCP_VER:-'4.12.11'}
 OCP_MAJ_VER=$(echo ${OCP_VER} | cut -d '.' -f 2)
@@ -39,20 +44,10 @@ do
   # i.e start with 4.12.11 then this is highest 4.12.x release
   LATEST_IN_CHANNEL_MIN=$(curl -s "https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable-4.${OCP_MAJ_VER}/release.txt" | grep '^Name: ' | awk -F\  '{print $NF}' | cut -d '.' -f 3)
   
-  # If we're already at the latest in channel then exit
-  #if ${OCP_MIN_VER} -eq ${LATEST_IN_CHANNEL_MIN}
-  #then
-  #  echo "Patch not found in latest version of stable ${OCP_MAJ_VER}"
-  #  exit 0
-  #fi
-  
   echo ${OCP_MIN_VER}
   echo ${LATEST_IN_CHANNEL_MIN}
   echo ${LATEST}
   
-  #for channel in $(seq $(echo "${OCP_MAJ_VER} + 1" | bc) $(echo "${LATEST} + 1" | bc)  )
-  
-  #for rel in $(seq $(echo "${OCP_MIN_VER} + 1" | bc) $(echo "${LATEST_IN_CHANNEL_MIN} + 1" | bc))
   for rel in $(seq $(echo "${OCP_MIN_VER} + 1" | bc) ${LATEST_IN_CHANNEL_MIN})
   do
     echo "Checking release: 4.${OCP_MAJ_VER}.${rel}"
